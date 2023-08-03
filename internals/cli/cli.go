@@ -155,18 +155,55 @@ type parserSetter interface {
 	setParser(*flags.Parser)
 }
 
+type contextSetter interface {
+	setContext(Context)
+}
+
+type mutableContext struct {
+	values map[interface{}]interface{}
+}
+
+func (mc *mutableContext) WithValue(key, value interface{}) MutableContext {
+	mc.values[key] = value
+	return mc
+}
+
+func (mc *mutableContext) Value(key interface{}) interface{} {
+	return mc.values[key]
+}
+
+type MutableContext interface {
+	Context
+	WithValue(key, value interface{}) MutableContext
+}
+
+func NewMutableContext() MutableContext {
+	return &mutableContext{
+		values: map[interface{}]interface{}{},
+	}
+}
+
+type Context interface {
+	Value(key interface{}) interface{}
+}
+
+type ContextMixin struct {
+	Context
+}
+
+func (cm *ContextMixin) setContext(ctx Context) {
+	cm.Context = ctx
+}
+
 type defaultOptions struct {
 	Version func() `long:"version" hidden:"yes" description:"Print the version and exit"`
 }
 
-// Parser creates and populates a fresh parser.
-// Since commands have local state a fresh parser is required to isolate tests
-// from each other.
-func Parser(cli *client.Client) *flags.Parser {
+func NewParser(ctx Context) *flags.Parser {
 	// Implement --version by default on every command
 	defaultOpts := defaultOptions{
 		Version: func() {
-			printVersions(cli)
+			//printVersions(cli)
 			panic(&exitStatus{0})
 		},
 	}
@@ -193,11 +230,18 @@ func Parser(cli *client.Client) *flags.Parser {
 	// Add all commands
 	for _, c := range commands {
 		obj := c.Builder()
-		if x, ok := obj.(clientSetter); ok {
-			x.setClient(cli)
+		if cs, ok := obj.(contextSetter); ok {
+			cs.setContext(ctx)
 		}
-		if x, ok := obj.(parserSetter); ok {
-			x.setParser(parser)
+		if cs, ok := obj.(clientSetter); ok {
+			c, ok := ctx.Value(client.ClientKey).(*client.Client)
+			if !ok {
+				logger.Panicf("internal error: cannot set client if not present in context")
+			}
+			cs.setClient(c)
+		}
+		if ps, ok := obj.(parserSetter); ok {
+			ps.setParser(parser)
 		}
 
 		var target *flags.Command
@@ -254,6 +298,14 @@ func Parser(cli *client.Client) *flags.Parser {
 	return parser
 }
 
+// Parser creates and populates a fresh parser.
+// Since commands have local state a fresh parser is required to isolate tests
+// from each other.
+func Parser(cli *client.Client) *flags.Parser {
+	ctx := NewMutableContext().WithValue(client.ClientKey, cli)
+	return NewParser(ctx)
+}
+
 var (
 	isStdinTTY  = terminal.IsTerminal(0)
 	isStdoutTTY = terminal.IsTerminal(1)
@@ -276,6 +328,17 @@ func (e *exitStatus) Error() string {
 }
 
 func Run() error {
+	_, clientConfig.Socket = getEnvPaths()
+	c, err := client.New(&clientConfig)
+	if err != nil {
+		return fmt.Errorf("cannot create client: %v", err)
+	}
+
+	ctx := NewMutableContext().WithValue(client.ClientKey, c)
+	return RunWithContext(ctx)
+}
+
+func RunWithContext(ctx Context) error {
 	defer func() {
 		if v := recover(); v != nil {
 			if e, ok := v.(*exitStatus); ok {
@@ -287,14 +350,7 @@ func Run() error {
 
 	logger.SetLogger(logger.New(os.Stderr, "[pebble] "))
 
-	_, clientConfig.Socket = getEnvPaths()
-
-	cli, err := client.New(&clientConfig)
-	if err != nil {
-		return fmt.Errorf("cannot create client: %v", err)
-	}
-
-	parser := Parser(cli)
+	parser := NewParser(ctx)
 	xtra, err := parser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok {
@@ -327,8 +383,9 @@ func Run() error {
 		return nil
 	}
 
-	maybePresentWarnings(cli.WarningsSummary())
-
+	if c, ok := ctx.Value(client.ClientKey).(*client.Client); ok {
+		maybePresentWarnings(c.WarningsSummary())
+	}
 	return nil
 }
 

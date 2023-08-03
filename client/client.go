@@ -104,6 +104,10 @@ type Config struct {
 	UserAgent string
 }
 
+type key int
+
+var ClientKey key
+
 // A Client knows how to talk to the Pebble daemon.
 type Client struct {
 	baseURL   url.URL
