@@ -30,7 +30,7 @@ The changes command displays a summary of system changes performed recently.
 `
 
 type cmdChanges struct {
-	clientMixin
+	meta
 	timeMixin
 	Positional struct {
 		Service string `positional-arg-name:"<service>"`
@@ -103,7 +103,7 @@ func (c *cmdChanges) Execute(args []string) error {
 		Selector:    client.ChangesAll,
 	}
 
-	changes, err := queryChanges(c.client, &opts)
+	changes, err := queryChanges(c.Client(), &opts)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func queryChange(cli *client.Client, chid string) (*client.Change, error) {
 }
 
 func (c *cmdTasks) showChange(chid string) error {
-	chg, err := queryChange(c.client, chid)
+	chg, err := queryChange(c.Client(), chid)
 	if err != nil {
 		return err
 	}

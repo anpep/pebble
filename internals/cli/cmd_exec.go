@@ -43,7 +43,7 @@ pebble exec --timeout 10s -- echo -n foo bar
 `
 
 type cmdExec struct {
-	clientMixin
+	meta
 	WorkingDir     string        `short:"w"`
 	Env            []string      `long:"env"`
 	UserID         *int          `long:"uid"`
@@ -183,7 +183,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 
 	// Start the command.
-	process, err := cmd.client.Exec(opts)
+	process, err := cmd.Client().Exec(opts)
 	if err != nil {
 		return err
 	}

@@ -19,6 +19,7 @@ import (
 
 	"github.com/canonical/go-flags"
 
+	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
 )
 
@@ -46,7 +47,7 @@ These subcommands are currently supported:
 `
 
 type cmdEnter struct {
-	clientMixin
+	meta
 	sharedRunEnterOpts
 	Run        bool `long:"run"`
 	Positional struct {
@@ -105,7 +106,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	runCmd := cmdRun{
 		sharedRunEnterOpts: cmd.sharedRunEnterOpts,
 	}
-	runCmd.setClient(cmd.client)
+	runCmd.Set(client.ClientKey, cmd.Client())
 
 	if len(cmd.Positional.Cmd) == 0 {
 		runCmd.run(nil)
@@ -119,7 +120,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		extraArgs []string
 	)
 
-	parser := Parser(cmd.client)
+	parser := NewParser(&cmd.meta)
 	parser.CommandHandler = func(c flags.Commander, a []string) error {
 		commander = c
 		extraArgs = a

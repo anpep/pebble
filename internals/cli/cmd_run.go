@@ -60,7 +60,7 @@ var sharedRunEnterArgsHelp = map[string]string{
 }
 
 type cmdRun struct {
-	clientMixin
+	meta
 	sharedRunEnterOpts
 }
 
@@ -201,7 +201,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 
 	if !rcmd.Hold {
 		servopts := client.ServiceOptions{}
-		changeID, err := rcmd.client.AutoStart(&servopts)
+		changeID, err := rcmd.Client().AutoStart(&servopts)
 		if err != nil {
 			logger.Noticef("Cannot start default services: %v", err)
 		} else {
@@ -237,7 +237,7 @@ out:
 	}
 
 	// Close our own self-connection, otherwise it prevents fast and clean termination.
-	rcmd.client.CloseIdleConnections()
+	rcmd.Client().CloseIdleConnections()
 
 	return d.Stop(ch)
 }

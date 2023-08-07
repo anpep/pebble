@@ -34,7 +34,7 @@ if none are specified) and displays them in chronological order.
 `
 
 type cmdLogs struct {
-	clientMixin
+	meta
 	Follow     bool   `short:"f" long:"follow"`
 	Format     string `long:"format"`
 	N          string `short:"n"`
@@ -105,9 +105,9 @@ func (cmd *cmdLogs) Execute(args []string) error {
 	if cmd.Follow {
 		// Stop following when Ctrl-C pressed (SIGINT).
 		ctx := notifyContext(context.Background(), os.Interrupt)
-		err = cmd.client.FollowLogs(ctx, &opts)
+		err = cmd.Client().FollowLogs(ctx, &opts)
 	} else {
-		err = cmd.client.Logs(&opts)
+		err = cmd.Client().Logs(&opts)
 	}
 	return err
 }

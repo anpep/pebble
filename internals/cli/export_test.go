@@ -32,6 +32,16 @@ func Client() *client.Client {
 	return cli
 }
 
+func ParserMeta() *meta {
+	m := newMeta()
+	c, err := client.New(ClientConfig)
+	if err != nil {
+		panic("cannot create client: " + err.Error())
+	}
+	m.Set(client.ClientKey, c)
+	return m
+}
+
 var (
 	CanUnicode      = canUnicode
 	ColorTable      = colorTable

@@ -22,7 +22,7 @@ import (
 )
 
 type changeIDMixin struct {
-	clientMixin
+	meta
 	LastChangeType string `long:"last"`
 	Positional     struct {
 		ChangeID string `positional-arg-name:"<change-id>"`
@@ -50,7 +50,7 @@ func (l *changeIDMixin) GetChangeID() (string, error) {
 		return string(l.Positional.ChangeID), nil
 	}
 
-	cli := l.client
+	cli := l.Client()
 	// note that at this point we know l.LastChangeType != ""
 	kind := l.LastChangeType
 	optional := false

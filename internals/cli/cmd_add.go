@@ -32,7 +32,7 @@ label (or append if the label is not found).
 `
 
 type cmdAdd struct {
-	clientMixin
+	meta
 	Combine    bool `long:"combine"`
 	Positional struct {
 		Label     string `positional-arg-name:"<label>" required:"1"`
@@ -65,7 +65,8 @@ func (cmd *cmdAdd) Execute(args []string) error {
 		Label:     cmd.Positional.Label,
 		LayerData: data,
 	}
-	err = cmd.client.AddLayer(&opts)
+
+	err = cmd.Client().AddLayer(&opts)
 	if err != nil {
 		return err
 	}

@@ -32,7 +32,7 @@ pebble signal HUP mysql nginx
 `
 
 type cmdSignal struct {
-	clientMixin
+	meta
 	Positional struct {
 		Signal   string   `positional-arg-name:"<SIGNAL>"`
 		Services []string `positional-arg-name:"<service>"`
@@ -59,7 +59,7 @@ func (cmd *cmdSignal) Execute(args []string) error {
 		Signal:   cmd.Positional.Signal,
 		Services: cmd.Positional.Services,
 	}
-	err := cmd.client.SendSignal(&opts)
+	err := cmd.Client().SendSignal(&opts)
 	if err != nil {
 		return err
 	}

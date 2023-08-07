@@ -33,7 +33,7 @@ may be specified for the last path element.
 `
 
 type cmdLs struct {
-	clientMixin
+	meta
 	timeMixin
 
 	Directory  bool `short:"d"`
@@ -67,7 +67,7 @@ func (cmd *cmdLs) Execute(args []string) error {
 		return err
 	}
 
-	files, err := cmd.client.ListFiles(&client.ListFilesOptions{
+	files, err := cmd.Client().ListFiles(&client.ListFilesOptions{
 		Path:    path,
 		Pattern: pattern,
 		Itself:  cmd.Directory,

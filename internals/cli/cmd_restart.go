@@ -50,7 +50,7 @@ func (cmd cmdRestart) Execute(args []string) error {
 	servopts := client.ServiceOptions{
 		Names: cmd.Positional.Services,
 	}
-	changeID, err := cmd.client.Restart(&servopts)
+	changeID, err := cmd.Client().Restart(&servopts)
 	if err != nil {
 		return err
 	}

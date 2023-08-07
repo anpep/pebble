@@ -29,7 +29,7 @@ about all services if none are specified.
 `
 
 type cmdServices struct {
-	clientMixin
+	meta
 	timeMixin
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
@@ -54,7 +54,7 @@ func (cmd *cmdServices) Execute(args []string) error {
 	opts := client.ServicesOptions{
 		Names: cmd.Positional.Services,
 	}
-	services, err := cmd.client.Services(&opts)
+	services, err := cmd.Client().Services(&opts)
 	if err != nil {
 		return err
 	}

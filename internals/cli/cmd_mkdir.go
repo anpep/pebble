@@ -30,7 +30,7 @@ The mkdir command creates the specified directory.
 `
 
 type cmdMkdir struct {
-	clientMixin
+	meta
 
 	MakeParents bool   `short:"p"`
 	Permissions string `short:"m"`
@@ -83,5 +83,5 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 		opts.Permissions = os.FileMode(p)
 	}
 
-	return cmd.client.MakeDir(&opts)
+	return cmd.Client().MakeDir(&opts)
 }

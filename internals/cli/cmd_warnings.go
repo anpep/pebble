@@ -43,7 +43,7 @@ Warnings expire automatically, and once expired they are forgotten.
 `
 
 type cmdWarnings struct {
-	clientMixin
+	meta
 	timeMixin
 	unicodeMixin
 	All     bool `long:"all"`
@@ -58,7 +58,7 @@ Once acknowledged, a warning won't appear again unless it reoccurs and
 sufficient time has passed.
 `
 
-type cmdOkay struct{ clientMixin }
+type cmdOkay struct{ meta }
 
 func init() {
 	AddCommand(&CmdInfo{
@@ -85,7 +85,7 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 	}
 	now := time.Now()
 
-	warnings, err := cmd.client.Warnings(client.WarningsOptions{All: cmd.All})
+	warnings, err := cmd.Client().Warnings(client.WarningsOptions{All: cmd.All})
 	if err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (cmd *cmdOkay) Execute(args []string) error {
 		return err
 	}
 
-	return cmd.client.Okay(last)
+	return cmd.Client().Okay(last)
 }
 
 const warnFileEnvKey = "PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME"

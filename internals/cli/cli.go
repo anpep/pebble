@@ -139,34 +139,60 @@ func fixupArg(optName string) string {
 	return optName
 }
 
-type clientSetter interface {
-	setClient(*client.Client)
+type Meta interface {
+	Get(k any) any
+	Set(k, v any)
+	Copy(other Meta)
 }
 
-type clientMixin struct {
-	client *client.Client
+type meta struct {
+	values map[any]any
 }
 
-func (ch *clientMixin) setClient(cli *client.Client) {
-	ch.client = cli
+func newMeta() *meta {
+	m := &meta{values: map[any]any{}}
+	return m
 }
 
-type parserSetter interface {
-	setParser(*flags.Parser)
+func (m *meta) Get(k any) any {
+	return m.values[k]
+}
+
+func (m *meta) Set(k, v any) {
+	if m.values == nil {
+		m.values = map[any]any{}
+	}
+	m.values[k] = v
+}
+
+func (m *meta) Copy(other Meta) {
+	for k, v := range m.values {
+		other.Set(k, v)
+	}
+}
+
+func (m *meta) Client() *client.Client {
+	v := m.Get(client.ClientKey)
+	if c, ok := v.(*client.Client); ok {
+		return c
+	}
+	logger.Panicf("internal error: wanted a Client, got %T", v)
+	return nil
 }
 
 type defaultOptions struct {
 	Version func() `long:"version" hidden:"yes" description:"Print the version and exit"`
 }
 
-// Parser creates and populates a fresh parser.
+// NewParser creates and populates a fresh parser.
 // Since commands have local state a fresh parser is required to isolate tests
 // from each other.
-func Parser(cli *client.Client) *flags.Parser {
+func NewParser(m Meta) *flags.Parser {
 	// Implement --version by default on every command
 	defaultOpts := defaultOptions{
 		Version: func() {
-			printVersions(cli)
+			// TODO
+			printVersions(nil)
 			panic(&exitStatus{0})
 		},
 	}
@@ -193,11 +219,8 @@ func Parser(cli *client.Client) *flags.Parser {
 	// Add all commands
 	for _, c := range commands {
 		obj := c.Builder()
-		if x, ok := obj.(clientSetter); ok {
-			x.setClient(cli)
-		}
-		if x, ok := obj.(parserSetter); ok {
-			x.setParser(parser)
+		if cm, ok := obj.(Meta); ok {
+			m.Copy(cm)
 		}
 
 		var target *flags.Command
@@ -275,7 +298,7 @@ func (e *exitStatus) Error() string {
 	return fmt.Sprintf("internal error: exitStatus{%d} being handled as normal error", e.code)
 }
 
-func Run() error {
+func RunWithMeta(m Meta) error {
 	defer func() {
 		if v := recover(); v != nil {
 			if e, ok := v.(*exitStatus); ok {
@@ -287,14 +310,7 @@ func Run() error {
 
 	logger.SetLogger(logger.New(os.Stderr, "[pebble] "))
 
-	_, clientConfig.Socket = getEnvPaths()
-
-	cli, err := client.New(&clientConfig)
-	if err != nil {
-		return fmt.Errorf("cannot create client: %v", err)
-	}
-
-	parser := Parser(cli)
+	parser := NewParser(m)
 	xtra, err := parser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok {
@@ -326,10 +342,22 @@ func Run() error {
 		fmt.Fprintln(Stderr, msg)
 		return nil
 	}
-
-	maybePresentWarnings(cli.WarningsSummary())
-
 	return nil
+}
+
+func Run() error {
+	_, clientConfig.Socket = getEnvPaths()
+	cli, err := client.New(&clientConfig)
+	if err != nil {
+		return fmt.Errorf("cannot create client: %v", err)
+	}
+
+	m := newMeta()
+	m.Set(client.ClientKey, cli)
+	if err = RunWithMeta(m); err != nil {
+		maybePresentWarnings(cli.WarningsSummary())
+	}
+	return err
 }
 
 var errorPrefix = "error: "
