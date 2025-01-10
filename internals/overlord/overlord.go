@@ -18,6 +18,7 @@ package overlord
 import (
 	"errors"
 	"fmt"
+	"github.com/canonical/pebble/internals/plan"
 	"io"
 	"os"
 	"path/filepath"
@@ -76,6 +77,8 @@ type Options struct {
 	ServiceOutput io.Writer
 	// Extension allows extending the overlord with externally defined features.
 	Extension Extension
+	// Workloads allow running services with data isolated from each other.
+	Workloads map[string]plan.Workload
 }
 
 // Overlord is the central manager of the system, keeping track
@@ -155,7 +158,7 @@ func New(opts *Options) (*Overlord, error) {
 	if layersDir == "" {
 		layersDir = filepath.Join(opts.PebbleDir, "layers")
 	}
-	o.planMgr, err = planstate.NewManager(layersDir)
+	o.planMgr, err = planstate.NewManager(layersDir, opts.Workloads)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create plan manager: %w", err)
 	}
@@ -168,7 +171,8 @@ func New(opts *Options) (*Overlord, error) {
 		o.runner,
 		opts.ServiceOutput,
 		opts.RestartHandler,
-		o.logMgr)
+		o.logMgr,
+		opts.Workloads)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create service manager: %w", err)
 	}

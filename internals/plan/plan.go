@@ -29,6 +29,7 @@ import (
 	"github.com/canonical/x-go/strutil/shlex"
 	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 )
@@ -105,13 +106,19 @@ func UnregisterSectionExtension(field string) {
 	})
 }
 
+type Workload struct {
+	Uid, Gid string
+	Env      map[string]string
+}
+
 type Plan struct {
 	Layers     []*Layer              `yaml:"-"`
 	Services   map[string]*Service   `yaml:"services,omitempty"`
 	Checks     map[string]*Check     `yaml:"checks,omitempty"`
 	LogTargets map[string]*LogTarget `yaml:"log-targets,omitempty"`
 
-	Sections map[string]Section `yaml:",inline"`
+	Sections  map[string]Section  `yaml:",inline"`
+	Workloads map[string]Workload `yaml:"-"`
 }
 
 // MarshalYAML implements an override for top level omitempty tags handling.
@@ -191,6 +198,7 @@ type Service struct {
 	Requires []string `yaml:"requires,omitempty"`
 
 	// Options for command execution
+	Workload    string            `yaml:"workload,omitempty"`
 	Environment map[string]string `yaml:"environment,omitempty"`
 	UserID      *int              `yaml:"user-id,omitempty"`
 	User        string            `yaml:"user,omitempty"`
@@ -251,6 +259,9 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.KillDelay.IsSet {
 		s.KillDelay = other.KillDelay
+	}
+	if other.Workload != "" {
+		s.Workload = other.Workload
 	}
 	if other.UserID != nil {
 		s.UserID = copyIntPtr(other.UserID)
@@ -824,9 +835,9 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 // See also Plan.Validate, which does additional checks based on the combined
 // layers.
 func (layer *Layer) Validate() error {
-	if strings.HasPrefix(layer.Label, "pebble-") {
+	if strings.HasPrefix(layer.Label, cmd.ProgramName+"-") {
 		return &FormatError{
-			Message: `cannot use reserved label prefix "pebble-"`,
+			Message: `cannot use reserved label prefix "` + cmd.ProgramName + `-"`,
 		}
 	}
 
@@ -836,7 +847,7 @@ func (layer *Layer) Validate() error {
 				Message: "cannot use empty string as service name",
 			}
 		}
-		if name == "pebble" {
+		if name == "pebble" || name == cmd.ProgramName {
 			// Disallow service name "pebble" to avoid ambiguity (for example,
 			// in log output).
 			return &FormatError{
@@ -861,6 +872,13 @@ func (layer *Layer) Validate() error {
 		if err != nil {
 			return &FormatError{
 				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
+			}
+		}
+		if service.Workload != "" && service.Workload != "default" {
+			if !cmd.SupportsWorkloads {
+				return &FormatError{
+					Message: fmt.Sprintf("service %q cannot be run in a workload because %v does not support it", cmd.DisplayName),
+				}
 			}
 		}
 		if !validServiceAction(service.OnSuccess, ActionFailureShutdown) {
@@ -898,11 +916,6 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf("check object cannot be null for check %q", name),
 			}
 		}
-		if name == "" {
-			return &FormatError{
-				Message: "cannot use empty string as log target name",
-			}
-		}
 		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
 			return &FormatError{
 				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
@@ -936,6 +949,11 @@ func (layer *Layer) Validate() error {
 	}
 
 	for name, target := range layer.LogTargets {
+		if name == "" {
+			return &FormatError{
+				Message: "cannot use empty string as log target name",
+			}
+		}
 		if target == nil {
 			return &FormatError{
 				Message: fmt.Sprintf("log target object cannot be null for log target %q", name),
@@ -979,6 +997,11 @@ func (p *Plan) Validate() error {
 		if service.Command == "" {
 			return &FormatError{
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+		}
+		if _, validWorkload := p.Workloads[service.Workload]; !validWorkload {
+			return &FormatError{
+				Message: fmt.Sprintf(`service %q cannot use non-existent workload %q`, name, service.Workload),
 			}
 		}
 	}

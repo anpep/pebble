@@ -95,6 +95,7 @@ type serviceData struct {
 	manager      *ServiceManager
 	state        serviceState
 	config       *plan.Service
+	workload     plan.Workload
 	logs         *servicelog.RingBuffer
 	started      chan error
 	stopped      chan error
@@ -174,13 +175,18 @@ func (m *ServiceManager) serviceForStart(config *plan.Service) (service *service
 	service = m.services[config.Name]
 	if service == nil {
 		// Not already started, create a new service object.
+		workload := plan.Workload{}
+		if config.Workload != "" && config.Workload != "default" {
+			workload = m.plan.Workloads[config.Workload]
+		}
 		service = &serviceData{
-			manager: m,
-			state:   stateInitial,
-			config:  config.Copy(),
-			logs:    servicelog.NewRingBuffer(maxLogBytes),
-			started: make(chan error, 1),
-			stopped: make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
+			manager:  m,
+			state:    stateInitial,
+			config:   config.Copy(),
+			workload: workload,
+			logs:     servicelog.NewRingBuffer(maxLogBytes),
+			started:  make(chan error, 1),
+			stopped:  make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
 		}
 		m.services[config.Name] = service
 		return service, ""
@@ -340,6 +346,10 @@ func (s *serviceData) startInternal() error {
 	// Copy environment to avoid updating original.
 	environment := make(map[string]string)
 	for k, v := range s.config.Environment {
+		environment[k] = v
+	}
+	// Overrides from the workload environment
+	for k, v := range s.workload.Env {
 		environment[k] = v
 	}
 

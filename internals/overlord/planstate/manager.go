@@ -42,10 +42,10 @@ type PlanManager struct {
 	changeListeners []PlanChangedFunc
 }
 
-func NewManager(layersDir string) (*PlanManager, error) {
+func NewManager(layersDir string, workloads map[string]plan.Workload) (*PlanManager, error) {
 	manager := &PlanManager{
 		layersDir: layersDir,
-		plan:      &plan.Plan{},
+		plan:      &plan.Plan{Workloads: workloads},
 	}
 	return manager, nil
 }
