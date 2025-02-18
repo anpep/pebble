@@ -19,8 +19,9 @@ import (
 	"errors"
 	"fmt"
 
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/plan"
 )
 
@@ -84,6 +85,13 @@ func (ext *WorkloadsSectionExtension) ValidatePlan(p *plan.Plan) error {
 			}
 		}
 	}
+	for name, workload := range ws.Entries {
+		if _, _, err := osutil.NormalizeUidGid(workload.UserID, workload.GroupID, workload.User, workload.Group); err != nil {
+			return &plan.FormatError{
+				Message: fmt.Sprintf(`%v for workload %q`, err, name),
+			}
+		}
+	}
 	return nil
 }
 
@@ -116,9 +124,7 @@ func (ws *WorkloadsSection) Validate() error {
 }
 
 func (ws *WorkloadsSection) combine(other *WorkloadsSection) error {
-	if len(other.Entries) != 0 && ws.Entries == nil {
-		ws.Entries = make(map[string]*Workload, len(other.Entries))
-	}
+	ws.Entries = makeMapIfNil(ws.Entries)
 	for name, workload := range other.Entries {
 		switch workload.Override {
 		case plan.MergeOverride:
@@ -174,39 +180,44 @@ func (w *Workload) copy() *Workload {
 		}
 	}
 	if w.UserID != nil {
-		copied.UserID = copyIntPtr(w.UserID)
+		copied.UserID = copyPtr(w.UserID)
 	}
 	if w.GroupID != nil {
-		copied.GroupID = copyIntPtr(w.GroupID)
+		copied.GroupID = copyPtr(w.GroupID)
 	}
 	return &copied
 }
 
 func (w *Workload) merge(other *Workload) {
-	if len(other.Environment) != 0 && w.Environment == nil {
-		w.Environment = make(map[string]string, len(other.Environment))
-	}
+	w.Environment = makeMapIfNil(w.Environment)
 	for k, v := range other.Environment {
 		w.Environment[k] = v
 	}
 	if other.UserID != nil {
-		w.UserID = copyIntPtr(other.UserID)
+		w.UserID = copyPtr(other.UserID)
 	}
 	if other.User != "" {
 		w.User = other.User
 	}
 	if other.GroupID != nil {
-		w.GroupID = copyIntPtr(other.GroupID)
+		w.GroupID = copyPtr(other.GroupID)
 	}
 	if other.Group != "" {
 		w.Group = other.Group
 	}
 }
 
-func copyIntPtr(p *int) *int {
+func copyPtr[T any](p *T) *T {
 	if p == nil {
 		return nil
 	}
 	copied := *p
 	return &copied
+}
+
+func makeMapIfNil[K comparable, V any](m map[K]V) map[K]V {
+	if m == nil {
+		m = make(map[K]V)
+	}
+	return m
 }

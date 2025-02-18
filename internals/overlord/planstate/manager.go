@@ -253,6 +253,8 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) (*plan.Plan, error)
 	if err != nil {
 		return nil, err
 	}
+	// Validate workloads & services here?
+	// We can make a switch in personality for KernOS/Pebble
 	m.plan = p
 	return p, nil
 }
