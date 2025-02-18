@@ -47,6 +47,7 @@ func (ext *WorkloadsSectionExtension) ParseSection(data yaml.Node) (plan.Section
 	// The following issue prevents us from using the yaml.Node decoder
 	// with KnownFields = true behavior. Once one of the proposals get
 	// merged, we can remove the intermediate Marshal step.
+	// https://github.com/go-yaml/yaml/issues/460
 	if len(data.Content) != 0 {
 		yml, err := yaml.Marshal(data)
 		if err != nil {
@@ -74,8 +75,10 @@ func (ext *WorkloadsSectionExtension) ValidatePlan(p *plan.Plan) error {
 		return fmt.Errorf("internal error: invalid section type %T", ws)
 	}
 	for name, service := range p.Services {
-		_, ok := ws.Entries[service.Workload]
-		if service.Workload != "" && !ok {
+		if service.Workload == "" {
+			continue
+		}
+		if _, ok := ws.Entries[service.Workload]; !ok {
 			return &plan.FormatError{
 				Message: fmt.Sprintf(`plan service %q cannot run in unknown workload %q`, name, service.Workload),
 			}

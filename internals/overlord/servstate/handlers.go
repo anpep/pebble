@@ -184,22 +184,19 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *Workloa
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
-	var w *Workload
-	if workload != nil {
-		w = workload.copy()
-	}
-
 	service = m.services[config.Name]
 	if service == nil {
 		// Not already started, create a new service object.
 		service = &serviceData{
-			manager:  m,
-			state:    stateInitial,
-			config:   config.Copy(),
-			workload: w,
-			logs:     servicelog.NewRingBuffer(maxLogBytes),
-			started:  make(chan error, 1),
-			stopped:  make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
+			manager: m,
+			state:   stateInitial,
+			logs:    servicelog.NewRingBuffer(maxLogBytes),
+			started: make(chan error, 1),
+			stopped: make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
+		}
+		service.config = config.Copy()
+		if workload != nil {
+			service.workload = workload.copy()
 		}
 		m.services[config.Name] = service
 		return service, ""
@@ -207,7 +204,9 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *Workloa
 
 	// Ensure config is up-to-date from the plan whenever the user starts a service.
 	service.config = config.Copy()
-	service.workload = w
+	if workload != nil {
+		service.workload = workload.copy()
+	}
 
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
