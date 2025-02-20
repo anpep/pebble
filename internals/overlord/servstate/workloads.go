@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 
 	"gopkg.in/yaml.v3"
 
@@ -81,14 +82,14 @@ func (ext *WorkloadsSectionExtension) ValidatePlan(p *plan.Plan) error {
 		}
 		if _, ok := ws.Entries[service.Workload]; !ok {
 			return &plan.FormatError{
-				Message: fmt.Sprintf(`plan service %q cannot run in unknown workload %q`, name, service.Workload),
+				Message: fmt.Sprintf(`plan service %q workload not defined: %q`, name, service.Workload),
 			}
 		}
 	}
 	for name, workload := range ws.Entries {
 		if _, _, err := osutil.NormalizeUidGid(workload.UserID, workload.GroupID, workload.User, workload.Group); err != nil {
 			return &plan.FormatError{
-				Message: fmt.Sprintf(`%v for workload %q`, err, name),
+				Message: fmt.Sprintf(`plan workload %q %v`, err, name),
 			}
 		}
 	}
@@ -111,7 +112,7 @@ func (ws *WorkloadsSection) Validate() error {
 	for name, workload := range ws.Entries {
 		if workload == nil {
 			return &plan.FormatError{
-				Message: fmt.Sprintf("workload %q has a null value", name),
+				Message: fmt.Sprintf("workload %q cannot have a null value", name),
 			}
 		}
 		if err := workload.validate(); err != nil {
@@ -124,8 +125,10 @@ func (ws *WorkloadsSection) Validate() error {
 }
 
 func (ws *WorkloadsSection) combine(other *WorkloadsSection) error {
-	ws.Entries = makeMapIfNil(ws.Entries)
 	for name, workload := range other.Entries {
+		if ws.Entries == nil {
+			ws.Entries = make(map[string]*Workload, len(other.Entries))
+		}
 		switch workload.Override {
 		case plan.MergeOverride:
 			if current, ok := ws.Entries[name]; ok {
@@ -173,25 +176,16 @@ func (w *Workload) validate() error {
 
 func (w *Workload) copy() *Workload {
 	copied := *w
-	if w.Environment != nil {
-		copied.Environment = make(map[string]string, len(w.Environment))
-		for k, v := range w.Environment {
-			copied.Environment[k] = v
-		}
-	}
-	if w.UserID != nil {
-		copied.UserID = copyPtr(w.UserID)
-	}
-	if w.GroupID != nil {
-		copied.GroupID = copyPtr(w.GroupID)
-	}
+	copied.Environment = maps.Clone(w.Environment)
+	copied.UserID = copyPtr(w.UserID)
+	copied.GroupID = copyPtr(w.GroupID)
 	return &copied
 }
 
 func (w *Workload) merge(other *Workload) {
-	w.Environment = makeMapIfNil(w.Environment)
-	for k, v := range other.Environment {
-		w.Environment[k] = v
+	if len(other.Environment) > 0 {
+		w.Environment = makeMapIfNil(w.Environment)
+		maps.Copy(w.Environment, other.Environment)
 	}
 	if other.UserID != nil {
 		w.UserID = copyPtr(other.UserID)

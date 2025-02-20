@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/user"
@@ -116,19 +117,15 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 
 	currentPlan := m.getPlan()
-	config, ok := currentPlan.Services[request.Name]
-	if !ok {
+	config, configFound := currentPlan.Services[request.Name]
+	if !configFound {
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}
 
 	var workload *Workload
-	if s, ok := currentPlan.Sections[WorkloadsField]; ok {
-		ws, ok := s.(*WorkloadsSection)
-		if !ok {
-			return fmt.Errorf("internal error: invalid section type %T", ws)
-		}
-		workload, ok = ws.Entries[config.Workload]
-		if config.Workload != "" && !ok {
+	if config.Workload != "" {
+		ws := currentPlan.Sections[WorkloadsField].(*WorkloadsSection)
+		if workload = ws.Entries[config.Workload]; workload == nil {
 			return fmt.Errorf("cannot find workload %q for service %q in plan", config.Workload, request.Name)
 		}
 	}
@@ -357,9 +354,13 @@ func (s *serviceData) startInternal() error {
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Copy environment to avoid updating original.
-	environment := make(map[string]string, len(s.config.Environment))
-	for k, v := range s.config.Environment {
-		environment[k] = v
+	var environment map[string]string
+	if s.workload != nil && len(s.workload.Environment) > 0 {
+		environment = maps.Clone(s.workload.Environment)
+	} else if len(s.config.Environment) > 0 {
+		environment = maps.Clone(s.config.Environment)
+	} else {
+		environment = make(map[string]string)
 	}
 
 	s.cmd.Dir = s.config.WorkingDir
@@ -367,7 +368,7 @@ func (s *serviceData) startInternal() error {
 	// Start as another user if specified in plan.
 	var uid, gid *int
 	if s.config.UserID != nil || s.config.GroupID != nil || s.config.User != "" || s.config.Group != "" {
-		// User/group config from the service takes precedence
+		// User/group config from the service takes precedence if any of them are set
 		uid, gid, err = osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
 		if err != nil {
 			return err
@@ -404,12 +405,6 @@ func (s *serviceData) startInternal() error {
 			if environment["USER"] == "" {
 				environment["USER"] = u.Username
 			}
-		}
-	}
-
-	if s.workload != nil && len(s.workload.Environment) != 0 {
-		for k, v := range s.workload.Environment {
-			environment[k] = v
 		}
 	}
 
